@@ -1,3 +1,16 @@
+function isMattermostSite() {
+  const noscriptElements = document.getElementsByTagName("noscript");
+  for (let i = 0; i < noscriptElements.length; i++) {
+    if (
+      noscriptElements[i].textContent ===
+      "To use Mattermost, please enable JavaScript."
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function initializeExtension() {
   function enhanceTextAndFont() {
     const fontFace = document.createElement("style");
@@ -118,6 +131,22 @@ function initializeExtension() {
       left: auto !important;
       right: -34px !important;
     }
+
+    .markdown__paragraph-inline {
+      direction: rtl !important;
+      font-family: 'Vazir', system-ui !important;
+      text-align: initial !important;
+    }
+
+    /* Handle paragraphs inside markdown__paragraph-inline */
+    .markdown__paragraph-inline p {
+      direction: auto !important;
+      unicode-bidi: plaintext !important;
+      font-family: 'Vazir', system-ui !important;
+      text-align: initial !important;
+    }
+
+
   `;
     document.head.appendChild(fontFace);
 
@@ -167,15 +196,17 @@ function initializeExtension() {
         element.classList.contains("comment-markdown") ||
         element.classList.contains("octo-editor-preview") ||
         element.classList.contains("MarkdownEditorInput") ||
-        element.classList.contains("octo-titletext")
+        element.classList.contains("octo-titletext") ||
+        element.classList.contains("markdown__paragraph-inline")
       ) {
         const direction = detectTextDirection(element.textContent);
         element.setAttribute("dir", direction);
 
-        // Special handling for octo-editor-preview and MarkdownEditorInput paragraphs
+        // Special handling for paragraphs
         if (
           element.classList.contains("octo-editor-preview") ||
-          element.classList.contains("MarkdownEditorInput")
+          element.classList.contains("MarkdownEditorInput") ||
+          element.classList.contains("markdown__paragraph-inline")
         ) {
           element.querySelectorAll("p").forEach((p) => {
             p.style.direction = "rtl";
@@ -203,6 +234,7 @@ function initializeExtension() {
     .octo-editor-preview,
     .MarkdownEditorInput,
     .octo-titletext,
+    .markdown__paragraph-inline,
     textarea,
     [contenteditable="true"],
     #post_textbox,
@@ -233,7 +265,7 @@ function initializeExtension() {
           // Element node
           if (
             node.matches(
-              '.post-message__text, .comment-markdown, .octo-editor-preview, .MarkdownEditorInput, .octo-titletext, textarea, [contenteditable="true"]'
+              '.post-message__text, .comment-markdown, .octo-editor-preview, .MarkdownEditorInput, .octo-titletext, .markdown__paragraph-inline, textarea, [contenteditable="true"]'
             )
           ) {
             handleElement(node);
@@ -241,7 +273,7 @@ function initializeExtension() {
           // Check children
           node
             .querySelectorAll(
-              '.post-message__text, .comment-markdown, .octo-editor-preview, .MarkdownEditorInput, .octo-titletext, textarea, [contenteditable="true"]'
+              '.post-message__text, .comment-markdown, .octo-editor-preview, .MarkdownEditorInput, .octo-titletext, .markdown__paragraph-inline, textarea, [contenteditable="true"]'
             )
             .forEach(handleElement);
 
@@ -283,21 +315,27 @@ function cleanup() {
   }
 }
 
-// Check initial state
-chrome.storage.sync.get(["enabled"], function (result) {
-  // Initialize if there's no stored value (first time) or if it's explicitly true
-  if (result.enabled === undefined || result.enabled === true) {
-    initializeExtension();
-  }
-});
-
-// Listen for messages from popup
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-  if (request.action === "toggleExtension") {
-    if (request.enabled) {
+if (isMattermostSite()) {
+  // Check initial state
+  chrome.storage.sync.get(["enabled"], function (result) {
+    // Initialize if there's no stored value (first time) or if it's explicitly true
+    if (result.enabled === undefined || result.enabled === true) {
       initializeExtension();
-    } else {
-      cleanup();
     }
-  }
-});
+  });
+
+  // Listen for messages from popup
+  chrome.runtime.onMessage.addListener(function (
+    request,
+    sender,
+    sendResponse
+  ) {
+    if (request.action === "toggleExtension") {
+      if (request.enabled) {
+        initializeExtension();
+      } else {
+        cleanup();
+      }
+    }
+  });
+}
